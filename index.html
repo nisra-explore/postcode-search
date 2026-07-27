@@ -21,6 +21,8 @@
     <meta name="apple-mobile-web-app-title" content="Find my area" />
 
     <link rel="stylesheet" href="nisra-styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    
 </head>
 
 
@@ -68,6 +70,7 @@ CSS: Adds basic styling for input, buttons, suggestions, and result display. -->
 
     <h1 class="site-title">Find my area</h1>
   </div>
+   <div class="w-100" style="background-color: #68a41e; height:10px;"></div>
 </header>
 
 <main id = "main-container" class="fma-container">           
@@ -107,7 +110,7 @@ CSS: Adds basic styling for input, buttons, suggestions, and result display. -->
 
                 <p><h3>Notes:</h3></p>
                 <ol>
-                    <li><p>This postcode search is based on the <a href="https://www.nisra.gov.uk/support/geography/central-postcode-directory">Central Postcode Directory (CPD)</a> last updated in July 2025.</p></li>
+                    <li><p>This postcode search is based on the <a href="https://www.nisra.gov.uk/support/geography/central-postcode-directory">Central Postcode Directory (CPD)</a> last updated in January 2026.</p></li>
                     <li><p>The CPD is a list of postcodes in Northern Ireland. It maps the postcodes to a range of administrative and statistical areas including Local Government Districts, District Electoral Areas, Data Zones, Super Data Zones and Settlements.</p></li>
                           <li><p>Addresses for most postcodes are located entirely within an area, but some postcodes straddle the boundaries of areas.  The CPD uses the address closest to the centre of each postcode area (the postcode centroid) as a ‘best fit’ approximation.  
                           This means that some addresses in a postcode may be in a different area than allocated by the CPD.  
@@ -201,146 +204,404 @@ CSS: Adds basic styling for input, buttons, suggestions, and result display. -->
 
 <script>
 
-    let postcodeData = []; // Array to store postcodes from the CSV file for filtering
+const postcodeField = "PC5"; // The column name in the CSV that contains the postcode data
+let postcodeData = [];
+let postcodeRows = [];
 
-    // Function to normalize postcodes by removing spaces and converting to uppercase for consistency
-    function normalizePostcode(postcode) {
-        return postcode.replace(/\s/g, '').toUpperCase();
+/**
+ * Remove spaces and convert a postcode to uppercase (this works on the postcode entered by the user).
+ */
+function normalizePostcode(postcode) {
+    return String(postcode ?? '')
+        .replace(/\s/g, '')
+        .toUpperCase();
+}
+
+/**
+ * Safely return an uppercase value.
+ *
+ * This avoids errors when a value is blank or missing.
+ */
+function uppercaseValue(value) {
+    return String(value ?? '').trim().toUpperCase();
+}
+
+/**
+ * Load and parse the postcode CSV once when the page opens.
+ */
+function loadPostcodes() {
+    Papa.parse('CPD_LIGHT_Jan26.csv', {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+
+        complete: function (results) {
+            if (results.errors.length > 0) {
+                console.warn('CSV parsing warnings:', results.errors);
+            }
+
+            /*
+             * Store all rows for the main postcode search.
+             *
+             * Each row is now an array:
+             * row[0] = postcode
+             * row[1] = next column
+             * etc.
+             */
+            postcodeRows = results.data;
+             console.log(postcodeRows[0]);
+
+             // Keep only valid postcode records, filter out inactive, no grid ref (99999) or incorrect grid ref (66666) records
+postcodeRows = postcodeRows.filter(row => {
+
+    const postcode = normalizePostcode(row[postcodeField]);
+
+    return (
+        postcode !== '' &&
+        postcode !== '0000000' &&
+        row.ACTIVE !== '0' &&
+        row.X !== '999999' &&
+        row.X !== '666666' &&
+        row.Y !== '999999' &&
+        row.Y !== '666666'
+    );
+});
+
+// Create the autocomplete list
+postcodeData = postcodeRows.map(row => normalizePostcode(row[postcodeField]));
+
+            console.log(`${postcodeData.length} postcodes loaded.`);
+        },
+
+        error: function (error) {
+            console.error('Error loading postcode data:', error);
+
+            document.getElementById('resultTable').innerHTML =
+                'The postcode data could not be loaded.';
+        }
+    });
+}
+
+/**
+ * Filter postcodes based on the user's input.
+ */
+function filterPostcodes() {
+    const searchInput = document.getElementById('searchInput');
+    const suggestionsElement = document.getElementById('suggestions');
+    const searchTerm = normalizePostcode(searchInput.value);
+
+    /*
+     * Do not show suggestions before the user starts typing.
+     */
+    if (searchTerm === '') {
+        suggestionsElement.innerHTML = '';
+        return;
     }
 
-    // Load postcodes from CSV file on page load, storing in `postcodeData` array
-    function loadPostcodes() {
-        fetch('CPD_LIGHT.txt')
-            .then(response => response.text())
-            .then(data => {
-                // Split CSV data into rows, taking only the first column (postcode) from each row
-                postcodeData = data.split('\n').map(row => row.split('\t')[0].trim());
-            })
+    const suggestions = postcodeData
+        .filter(postcode => postcode.includes(searchTerm))
+        .slice(0, 10);
 
+    const suggestionsHTML = suggestions
+        .map(postcode => {
+            const formattedPostcode =
+                `${postcode.slice(0, -3)} ${postcode.slice(-3)}`;
 
-            .catch(error => console.error('Error loading postcode data:', error));
-    }
+            return `
+                <div
+                    class="postcode-suggestion"
+                    data-postcode="${postcode}"
+                >
+                    ${formattedPostcode}
+                </div>
+            `;
+        })
+        .join('');
 
-    // Filter postcodes based on user input and display suggestions
-    function filterPostcodes() {
-        const searchTerm = normalizePostcode(document.getElementById('searchInput').value);
+    suggestionsElement.innerHTML =
+        suggestionsHTML || '<div>No matching postcodes found.</div>';
 
-        // Filter `postcodeData` for matches, limited to 10 suggestions
-        const suggestions = postcodeData.filter(postcode => postcode.includes(searchTerm) & postcode != "postcode" & postcode != "0000000").slice(0, 10);
+    /*
+     * Using event listeners is safer than placing the postcode
+     * directly inside an onclick attribute.
+     */
+    suggestionsElement
+        .querySelectorAll('.postcode-suggestion')
+        .forEach(suggestion => {
+            suggestion.addEventListener('click', function () {
+                selectPostcode(this.dataset.postcode);
+            });
+        });
+}
 
-        // Generate HTML for suggestions and inject into `#suggestions` div
-        const suggestionsHTML = suggestions.map(postcode => `<div onclick="selectPostcode('${postcode}')">${postcode.slice(0, -3)} ${postcode.substr(-3)}</div>`).join('');
+/**
+ * Put a selected postcode into the search box and run the lookup.
+ */
+function selectPostcode(postcode) {
+    const normalizedPostcode = normalizePostcode(postcode);
 
-        document.getElementById('suggestions').innerHTML = suggestionsHTML || '<div>No matching postcodes found.</div>';
-    }
+    document.getElementById('searchInput').value =
+        `${normalizedPostcode.slice(0, -3)} ${normalizedPostcode.slice(-3)}`;
 
-    // Set selected postcode into the search input and clear suggestions, then start search
-    function selectPostcode(postcode) {
-        document.getElementById('searchInput').value = `${postcode.slice(0, -3)} ${postcode.substr(-3)}`;
-        document.getElementById('suggestions').innerHTML = ''; // Clear suggestions
-        search(); // Perform search with selected postcode
-    }
+    document.getElementById('suggestions').innerHTML = '';
 
-    function search() {
-    const searchTerm = normalizePostcode(document.getElementById('searchInput').value);
+    search();
+}
 
-    // Check if postcode is entered
+/**
+ * Search the already-loaded postcode data.
+ */
+function search() {
+    const searchTerm = normalizePostcode(
+        document.getElementById('searchInput').value
+    );
+
     if (searchTerm === '') {
         alert('Please enter a postcode.');
         return;
     }
 
-    // Fetch data from tab-delimited text file
-    fetch('CPD_LIGHT.txt')
-        .then(response => response.text())
-        .then(data => {
-            const rows = data.split('\n');
-            let found = false; // Flag to track if postcode is found
+    /*
+     * Check that the CSV has finished loading.
+     */
+    if (postcodeRows.length === 0) {
+        alert('The postcode data is still loading. Please try again.');
+        return;
+    }
 
-            // Initialize HTML for result display
-            let pHTML = "<p>";
-           
-                let tableHTMLadmin = "<table><tr><th>Area type</th><th>Area code</th><th>Area name</th><th>View</th></tr>";
-            let tableHTMLstats = "<table><tr><th>Area type</th><th>Area code</th><th>Area name</th><th>View</th></tr>";
-            let tableHTMLother = "<table><tr><th>Area type</th><th>Area code</th><th>Area name</th><th></th></tr>";
+    /*
+     * Find the first matching row.
+     *
+     * This replaces the previous rows.forEach() loop.
+     */
+    const matchedRow = postcodeRows.find(row => {
+        return normalizePostcode(row.PC5) === searchTerm;
+    });
 
-            rows.forEach(row => {
-                // Split the row by the tab delimiter
-                const columns = row.split('\t').map(col => col.trim());
+    if (!matchedRow) {
+        document.getElementById('resultTable').innerHTML =
+            'Postcode not found.';
+        return;
+    }
 
-                // Ensure the row has enough columns before processing
-                    const postcode = normalizePostcode(columns[0]);
+    /*
+     * The existing column numbers have been retained.
+     *
+     * These will work only if CPD_LIGHT_Jan26.csv has the same
+     * column order as the previous file.
+     */
+    const LGD2014 = uppercaseValue(matchedRow.LGD2014);
+    const LGD2014NAME = uppercaseValue(matchedRow.LGD2014NAME);
 
-                    // Match the input postcode with file data
-                    if (postcode === searchTerm) {
-                        // Extract specific fields related to the matched postcode
-                        const LGD2014 = columns[4];
-                        const LGD2014NAME = columns[5].toUpperCase();
-                        const WARD2014 = columns[6];
-                        const WARD2014NAME = columns[7].toUpperCase();
-                        const DEA2014 = columns[8];
-                        const DEA2014NAME = columns[9].toUpperCase();
-                        const AA2008 = columns[10];
-                        const AA2008NAME = columns[11].toUpperCase();
-                        const SDZ2021 = columns[20];
-                        const SDZ2021_name = columns[21].toUpperCase();
-                        const HSCT = columns[16].toUpperCase();
-                        const HSCTNAME = columns[17].toUpperCase();
-                        const DZ2021 = columns[18];
-                        const DZ2021_name = columns[19].toUpperCase();
-                        const AA2024 = columns[22];
-                        const AA2024NAME = columns[23].toUpperCase();
-                        const SA2011 = columns[24];
-                        const SOA2001 = columns[25];
-                        const SOA2001NAME = columns[26].toUpperCase();
-                        const SETTLEMENT15 = columns[30].toUpperCase();
-                        const SETTLEMENT15_URBAN_RURAL = columns[31].toUpperCase();
-                        const LATITUDE = columns[32];
-                        const LONGITUDE = columns[33];
+    const WARD2014 = uppercaseValue(matchedRow.WARD2014);
+    const WARD2014NAME = uppercaseValue(matchedRow.WARD2014NAME);
 
-                        // Format the result with matched data
-                        pHTML += `<strong>Postcode:</strong> ${postcode.slice(0, -3)} ${postcode.substr(-3)}`;
+    const DEA2014 = uppercaseValue(matchedRow.DEA2014);
+    const DEA2014NAME = uppercaseValue(matchedRow.DEA2014NAME);
 
-                        tableHTMLadmin += `<tr><td>Health and Social Care Trust</td><td>${HSCT}</td><td>${HSCTNAME}</td><td><a href="https://visual.nisra.gov.uk/?body=entity/las&boundary=HSCT&guid=${HSCT}">Making Life Better Public Health Profile</a></td></tr>`;
-                        tableHTMLadmin += `<tr><td>Assembly Area (2024)</td><td>${AA2024}</td><td>${AA2024NAME}</td><td></td></tr>`;
-                        tableHTMLadmin += `<tr><td>Local Government District (2014)</td><td>${LGD2014}</td><td>${LGD2014NAME}</td><td>
-                            <a href="https://explore.nisra.gov.uk/local-stats/${LGD2014}">Area Profile</a></td></tr>`;
-                        tableHTMLadmin += `<tr><td>District Electoral Area (2014)</td><td>${DEA2014}</td><td>${DEA2014NAME}</td><td><a href="https://explore.nisra.gov.uk/local-stats/${DEA2014}">Area Profile</a></td></tr>`;
-                        tableHTMLadmin += `<tr><td>Electoral Ward (2014)</td><td>${WARD2014}</td><td>${WARD2014NAME}</td><td></td></tr>`;
-                        tableHTMLadmin += `<tr><td>Assembly Area (2008)</td><td>${AA2008}</td><td>${AA2008NAME}</td><td></td></tr>`;
+    const AA2008 = uppercaseValue(matchedRow.AA2008);
+    const AA2008NAME = uppercaseValue(matchedRow.AA2008NAME);
 
-                        tableHTMLstats += `<tr><td>Super Data Zone (2021)</td><td>${SDZ2021}</td><td>${SDZ2021_name}</td><td><a href="https://explore.nisra.gov.uk/local-stats/${SDZ2021}">Area Profile</a></td></tr>`;
-                        tableHTMLstats += `<tr><td>Data Zone (2021)</td><td>${DZ2021}</td><td>${DZ2021_name}</td><td><a href="https://explore.nisra.gov.uk/local-stats/${DZ2021}">Area Profile</a></td></tr>`;
-                        tableHTMLstats += `<tr><td>Super Output Area (2011)</td><td>${SOA2001}</td><td>${SOA2001NAME}</td><td></td></tr>`;
-                        tableHTMLstats += `<tr><td>Small Area (2011)</td><td>${SA2011}</td><td></td></tr>`;
+    const HSCT = uppercaseValue(matchedRow.HSCT);
+    const HSCTNAME = uppercaseValue(matchedRow.HSCTNAME);
 
-                        tableHTMLother += `<tr><td>Urban / Rural</td><td></td><td>${SETTLEMENT15_URBAN_RURAL}</td><td></td></tr>`;
-                        tableHTMLother += `<tr><td>Settlement (2015)</td><td></td><td>${SETTLEMENT15}</td><td></td></tr>`;
+    const DZ2021 = uppercaseValue(matchedRow.DZ2021);
+    const DZ2021NAME = uppercaseValue(matchedRow.DZ2021_name);
 
-                        found = true;
-                    }
-            });
+    const SDZ2021 = uppercaseValue(matchedRow.SDZ2021);
+    const SDZ2021NAME = uppercaseValue(matchedRow.SDZ2021_name);
 
-            // Finalize HTML structure for results
-            pHTML += "</p>";
-          
-            tableHTMLadmin += "</table>";
-            tableHTMLstats += "</table>";
-            tableHTMLother += "</table>";
+    const AA2024 = uppercaseValue(matchedRow.AA2024);
+    const AA2024NAME = uppercaseValue(matchedRow.AA2024NAME);
 
-            // Display either results or 'not found' message
-            document.getElementById('resultTable').innerHTML = found 
-                ? pHTML + "<p>Caution: this search should not be used to determine information about individual addresses because some postcodes span multiple boundaries. See note 3 below for more information.</p><p><h2>Administrative areas in Northern Ireland</h2></p>" + tableHTMLadmin +
-                  "<p><h2>Statistical areas in Northern Ireland</h2></p>" +  tableHTMLstats +
-                  "<p><h2>Other areas in Northern Ireland</h2></p>" +  tableHTMLother
-                : 'Postcode not found.';
-        })
-        .catch(error => {
-            console.error('Error fetching data:', error);
-            alert('Error fetching data. Please try again.');
-        });
+    const SA2011 = uppercaseValue(matchedRow.SA2011);
+
+    const SOA2001 = uppercaseValue(matchedRow.SOA2001);
+    const SOA2001NAME = uppercaseValue(matchedRow.SOA2001NAME);
+
+    const SETTLEMENT15 = uppercaseValue(matchedRow.SETTLEMENT15);
+    const SETTLEMENT15_URBAN_RURAL = uppercaseValue(matchedRow.SETTLEMENT15_URBAN_RURAL);
+
+    const LATITUDE = uppercaseValue(matchedRow.LATITUDE);
+    const LONGITUDE = uppercaseValue(matchedRow.LONGITUDE);
+
+    const formattedPostcode =
+        `${searchTerm.slice(0, -3)} ${searchTerm.slice(-3)}`;
+
+    let pHTML = `
+        <p>
+            <strong>Postcode:</strong> ${formattedPostcode}
+        </p>
+    `;
+
+    let tableHTMLadmin = `
+        <table>
+            <tr>
+                <th>Area type</th>
+                <th>Area code</th>
+                <th>Area name</th>
+                <th>View</th>
+            </tr>
+    `;
+
+    let tableHTMLstats = `
+        <table>
+            <tr>
+                <th>Area type</th>
+                <th>Area code</th>
+                <th>Area name</th>
+                <th>View</th>
+            </tr>
+    `;
+
+    let tableHTMLother = `
+        <table>
+            <tr>
+                <th>Area type</th>
+                <th>Area code</th>
+                <th>Area name</th>
+                <th></th>
+            </tr>
+    `;
+
+    tableHTMLadmin += `
+        <tr>
+            <td>Health and Social Care Trust</td>
+            <td>${HSCT}</td>
+            <td>${HSCTNAME}</td>
+            <td>
+                <a href="https://visual.nisra.gov.uk/?body=entity/las&boundary=HSCT&guid=${encodeURIComponent(HSCT)}">
+                    Making Life Better Public Health Profile
+                </a>
+            </td>
+        </tr>
+
+        <tr>
+            <td>Assembly Area (2024)</td>
+            <td>${AA2024}</td>
+            <td>${AA2024NAME}</td>
+            <td></td>
+        </tr>
+
+        <tr>
+            <td>Local Government District (2014)</td>
+            <td>${LGD2014}</td>
+            <td>${LGD2014NAME}</td>
+            <td>
+                <a href="https://explore.nisra.gov.uk/local-stats/${encodeURIComponent(LGD2014)}">
+                    Area Profile
+                </a>
+            </td>
+        </tr>
+
+        <tr>
+            <td>District Electoral Area (2014)</td>
+            <td>${DEA2014}</td>
+            <td>${DEA2014NAME}</td>
+            <td>
+                <a href="https://explore.nisra.gov.uk/local-stats/${encodeURIComponent(DEA2014)}">
+                    Area Profile
+                </a>
+            </td>
+        </tr>
+
+        <tr>
+            <td>Electoral Ward (2014)</td>
+            <td>${WARD2014}</td>
+            <td>${WARD2014NAME}</td>
+            <td></td>
+        </tr>
+
+        <tr>
+            <td>Assembly Area (2008)</td>
+            <td>${AA2008}</td>
+            <td>${AA2008NAME}</td>
+            <td></td>
+        </tr>
+    `;
+
+    tableHTMLstats += `
+        <tr>
+            <td>Super Data Zone (2021)</td>
+            <td>${SDZ2021}</td>
+            <td>${SDZ2021NAME}</td>
+            <td>
+                <a href="https://explore.nisra.gov.uk/local-stats/${encodeURIComponent(SDZ2021)}">
+                    Area Profile
+                </a>
+            </td>
+        </tr>
+
+        <tr>
+            <td>Data Zone (2021)</td>
+            <td>${DZ2021}</td>
+            <td>${DZ2021NAME}</td>
+            <td>
+                <a href="https://explore.nisra.gov.uk/local-stats/${encodeURIComponent(DZ2021)}">
+                    Area Profile
+                </a>
+            </td>
+        </tr>
+
+        <tr>
+            <td>Super Output Area (2011)</td>
+            <td>${SOA2001}</td>
+            <td>${SOA2001NAME}</td>
+            <td></td>
+        </tr>
+
+        <tr>
+            <td>Small Area (2011)</td>
+            <td>${SA2011}</td>
+            <td></td>
+            <td></td>
+        </tr>
+    `;
+
+    tableHTMLother += `
+        <tr>
+            <td>Urban / Rural</td>
+            <td></td>
+            <td>${SETTLEMENT15_URBAN_RURAL}</td>
+            <td></td>
+        </tr>
+
+        <tr>
+            <td>Settlement (2015)</td>
+            <td></td>
+            <td>${SETTLEMENT15}</td>
+            <td></td>
+        </tr>
+    `;
+
+    tableHTMLadmin += '</table>';
+    tableHTMLstats += '</table>';
+    tableHTMLother += '</table>';
+
+    document.getElementById('resultTable').innerHTML = `
+        ${pHTML}
+
+        <p>
+            Caution: this search should not be used to determine
+            information about individual addresses because some postcodes
+            span multiple boundaries. See note 3 below for more information.
+        </p>
+
+        <h2>Administrative areas in Northern Ireland</h2>
+        ${tableHTMLadmin}
+
+        <h2>Statistical areas in Northern Ireland</h2>
+        ${tableHTMLstats}
+
+        <h2>Other areas in Northern Ireland</h2>
+        ${tableHTMLother}
+    `;
 }
 
+/*
+ * Load the CSV after the HTML document is ready.
+ */
+document.addEventListener('DOMContentLoaded', loadPostcodes);
 
 
     // Function to set position of footer
