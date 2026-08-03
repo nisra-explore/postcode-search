@@ -53,8 +53,7 @@ CSS: Adds basic styling for input, buttons, suggestions, and result display. -->
                 <div class="text-white text-center py-2 px-3">
             <strong>This is a prototype application.  We welcome feedback from users through our 
                 <a href="https://dttselfserve.nidirect.gov.uk/NISRA/RateIt#/postcode_search" 
-                    target="_blank"><span style="color: #ffffff; text-decoration: underline;">short survey</span>
-                    </a> 
+                    target="_blank" class="survey-link">short survey</a> 
             </strong>
             </div>
             </div>
@@ -81,7 +80,7 @@ CSS: Adds basic styling for input, buttons, suggestions, and result display. -->
         </div>
 
         <div class="table-container div-grey-box" >
-            <div class="row">
+            <div class="postcode-search-row">
             <div class="column left" >
                 
                 <!-- Input box for postcode search with dynamic filtering on input -->
@@ -93,8 +92,9 @@ CSS: Adds basic styling for input, buttons, suggestions, and result display. -->
             </div>
 
             <div class="column right" >
-                <!-- Button to perform a search based on the input postcode -->
-                <button onclick="search()">Search</button>
+                 <button class="search-btn" onclick="search()" aria-label="Search">
+                    <i class="bi bi-search"></i>
+                 </button>
             </div>
             </div>
             <!-- Result area for displaying information related to the selected postcode -->
@@ -119,7 +119,7 @@ CSS: Adds basic styling for input, buttons, suggestions, and result display. -->
                         <li><p>The location of addresses (based on <a href = "https://www.nidirect.gov.uk/articles/pointer">Pointer</a>), postcodes and the boundaries of the areas can be explored in more detail using the
                             <a href = "https://osni-spatialni.hub.arcgis.com/apps/54ff8739ea1946cf8083ac13fff3f5dd/explore">NISRA Boundary Application</a>.
                         </p></li>
-                        <li style="list-style-type: none"><p><a  href="https://apps.spatialni.gov.uk/NISRABoundariesApplication/index.html"><img alt="NISRA Boundary Application" role="img" class="notes-image" src="images/nisraboundaryapplication.png"></a></p></li>
+                        <li style="list-style-type: none"><p><a class="image-link" href="https://osni-spatialni.hub.arcgis.com/apps/54ff8739ea1946cf8083ac13fff3f5dd/explore"><img alt="NISRA Boundary Application" class="notes-image" src="images/nisraboundaryapplication.png"></a></p></li>
                     </ol>
             </div>
         </div>
@@ -127,8 +127,6 @@ CSS: Adds basic styling for input, buttons, suggestions, and result display. -->
 
 <footer class="footer">
     <div class="footer-inner">
-      <!-- <div class="container"> -->
-        <!-- 3 column section -->
         <div class="row gy-3 mb-3">
           <div class="col-md-4">
             <h4>Data Tools</h4>
@@ -151,7 +149,7 @@ CSS: Adds basic styling for input, buttons, suggestions, and result display. -->
             <ul class="list-inline">
               <li class="list-inline-item">
                 <a href="https://www.facebook.com/nisra.gov.uk">
-                  <img src="images/facebook-brands-solid-full.svg" alt="NISRAFacebook" role="img" class="img-50"/>
+                  <img src="images/facebook-brands-solid-full.svg" alt="NISRA Facebook" role="img" class="img-50"/>
                 </a>
               </li>
               <li class="list-inline-item">
@@ -190,7 +188,6 @@ CSS: Adds basic styling for input, buttons, suggestions, and result display. -->
           <li class="list-inline-item">|</li>
           <li class="list-inline-item"><a href="https://datavis.nisra.gov.uk/dissemination/accessibility-statement-visualisations.html">Accessibility Statement</a></li>
         </ul>
-      <!-- </div> -->
       </div>
     </footer>
 
