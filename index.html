@@ -227,7 +227,7 @@ function uppercaseValue(value) {
  * Load and parse the postcode CSV once when the page opens.
  */
 function loadPostcodes() {
-    Papa.parse('CPD_LIGHT_Jan26.csv', {
+    Papa.parse('CPD_LIGHT.csv', {
         download: true,
         header: true,
         skipEmptyLines: true,
@@ -248,21 +248,6 @@ function loadPostcodes() {
             postcodeRows = results.data;
              console.log(postcodeRows[0]);
 
-             // Keep only valid postcode records, filter out inactive, no grid ref (99999) or incorrect grid ref (66666) records
-postcodeRows = postcodeRows.filter(row => {
-
-    const postcode = normalizePostcode(row[postcodeField]);
-
-    return (
-        postcode !== '' &&
-        postcode !== '0000000' &&
-        row.ACTIVE !== '0' &&
-        row.X !== '999999' &&
-        row.X !== '666666' &&
-        row.Y !== '999999' &&
-        row.Y !== '666666'
-    );
-});
 
 // Create the autocomplete list
 postcodeData = postcodeRows.map(row => normalizePostcode(row[postcodeField]));
@@ -381,12 +366,6 @@ function search() {
         return;
     }
 
-    /*
-     * The existing column numbers have been retained.
-     *
-     * These will work only if CPD_LIGHT_Jan26.csv has the same
-     * column order as the previous file.
-     */
     const LGD2014 = uppercaseValue(matchedRow.LGD2014);
     const LGD2014NAME = uppercaseValue(matchedRow.LGD2014NAME);
 
