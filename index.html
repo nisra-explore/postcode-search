@@ -112,6 +112,7 @@ CSS: Adds basic styling for input, buttons, suggestions, and result display. -->
                 <ol>
                     <li><p>This postcode search is based on the <a href="https://www.nisra.gov.uk/support/geography/central-postcode-directory">Central Postcode Directory (CPD)</a> last updated in January 2026.</p></li>
                     <li><p>The CPD is a list of postcodes in Northern Ireland. It maps the postcodes to a range of administrative and statistical areas including Local Government Districts, District Electoral Areas, Data Zones, Super Data Zones and Settlements.</p></li>
+                    <li><p>Inactive postcodes are terminated. Royal Mail terminates postcodes for various reasons. Most commonly when buildings are demolished or redeveloped.</p></li>
                           <li><p>Addresses for most postcodes are located entirely within an area, but some postcodes straddle the boundaries of areas.  The CPD uses the address closest to the centre of each postcode area (the postcode centroid) as a ‘best fit’ approximation.  
                           This means that some addresses in a postcode may be in a different area than allocated by the CPD.  
                           Further information is available on the <a href="https://www.nisra.gov.uk/publications/central-postcode-directory-supporting-documents">postal geography and georeferencing</a> in the CPD supporting documentation.
@@ -366,6 +367,7 @@ function search() {
         return;
     }
 
+    const ACTIVE = matchedRow.ACTIVE;
     const LGD2014 = uppercaseValue(matchedRow.LGD2014);
     const LGD2014NAME = uppercaseValue(matchedRow.LGD2014NAME);
 
@@ -403,6 +405,16 @@ function search() {
 
     const formattedPostcode =
         `${searchTerm.slice(0, -3)} ${searchTerm.slice(-3)}`;
+
+        let inactiveHTML = '';
+        if (ACTIVE === '0') {
+    inactiveHTML = `
+        <p class="inactive-postcode">
+            This postcode is inactive. See note 3 below for more information.
+        </p>
+    `;
+    }
+
 
     let pHTML = `
         <p>
@@ -556,11 +568,11 @@ function search() {
 
     document.getElementById('resultTable').innerHTML = `
         ${pHTML}
-
+         ${inactiveHTML}
         <p>
             Caution: this search should not be used to determine
             information about individual addresses because some postcodes
-            span multiple boundaries. See note 3 below for more information.
+            span multiple boundaries. See note 4 below for more information.
         </p>
 
         <h2>Administrative areas in Northern Ireland</h2>
